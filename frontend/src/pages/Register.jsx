@@ -1,11 +1,31 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
+import { auth, saveAuthData, isLoggedIn } from '../services/api.js';
 
 export default function Register() {
   const navigate = useNavigate();
 
-  const handleRegister = (e) => {
+  // Already logged in → go to dashboard
+  if (isLoggedIn()) return <Navigate to="/dashboard" replace />;
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async (e) => {
     e.preventDefault();
-    navigate('/dashboard'); // Mock login success
+    setError('');
+    setLoading(true);
+    try {
+      const data = await auth.register(name, email, password);
+      saveAuthData(data.token, data.user);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,7 +60,7 @@ export default function Register() {
               <label className="block text-xs font-bold tracking-widest uppercase text-gray-500 mb-2 ml-1" htmlFor="name">Full Name</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-primary/60 text-lg">person</span>
-                <input className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/50 dark:bg-black/20 border border-primary/20 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none placeholder:text-gray-400" id="name" placeholder="John Doe" type="text" />
+                <input className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/50 dark:bg-black/20 border border-primary/20 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none placeholder:text-gray-400" id="name" placeholder="John Doe" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
             </div>
 
@@ -48,7 +68,7 @@ export default function Register() {
               <label className="block text-xs font-bold tracking-widest uppercase text-gray-500 mb-2 ml-1" htmlFor="email">Email Address</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-primary/60 text-lg">mail</span>
-                <input className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/50 dark:bg-black/20 border border-primary/20 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none placeholder:text-gray-400" id="email" placeholder="name@company.com" type="email" />
+                <input className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/50 dark:bg-black/20 border border-primary/20 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none placeholder:text-gray-400" id="email" placeholder="name@company.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
             </div>
             
@@ -56,12 +76,18 @@ export default function Register() {
               <label className="block text-xs font-bold tracking-widest uppercase text-gray-500 mb-2 ml-1" htmlFor="password">Password</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-primary/60 text-lg">lock</span>
-                <input className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/50 dark:bg-black/20 border border-primary/20 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none placeholder:text-gray-400" id="password" placeholder="••••••••" type="password" />
+                <input className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/50 dark:bg-black/20 border border-primary/20 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none placeholder:text-gray-400" id="password" placeholder="••••••••" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
             </div>
+
+            {error && (
+              <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-400/30 text-red-500 text-sm font-medium">
+                {error}
+              </div>
+            )}
             
-            <button type="submit" className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#1fad7e] to-[#158f66] text-white font-bold text-lg shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all duration-200 mt-4">
-              Create Account
+            <button type="submit" disabled={loading} className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#1fad7e] to-[#158f66] text-white font-bold text-lg shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all duration-200 mt-4 disabled:opacity-60 disabled:cursor-not-allowed">
+              {loading ? 'Creating account…' : 'Create Account'}
             </button>
           </form>
           
