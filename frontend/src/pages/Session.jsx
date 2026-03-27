@@ -30,6 +30,7 @@ export default function Session() {
   const [statusMsg, setStatusMsg] = useState('Initializing session…');
   const timerRef = useRef(null);
   const transcriptEndRef = useRef(null);
+  const voiceLiveStarted = useRef(false);
   const { token } = getAuthData();
 
   // ── Timer ─────────────────────────────────────────────────────────────────────
@@ -44,7 +45,7 @@ export default function Session() {
     return `00:${m}:${sec}`;
   };
 
-  // ── Session init + WebSocket ──────────────────────────────────────────────────
+  // ── Session init: VoiceLive (direct) + WebSocket (analytics) ─────────────────
   useEffect(() => {
     let mounted = true;
 
@@ -54,92 +55,113 @@ export default function Session() {
         const { session_id } = await sessionsApi.start(subject, config.name);
         if (!mounted) return;
         setSessionId(session_id);
-        setStatusMsg('Connecting to AI tutor…');
+        setStatusMsg('Starting Voice Live session…');
 
-        // 2. Connect WebSocket
-        if (!token) {
-          setStatusMsg('⚠️ Not logged in — transcript won\'t save');
-          return;
+        // 2. Connect analytics WebSocket (key concepts, mastery, assessment)
+        if (token) {
+          try {
+            await voiceSocket.connect(token);
+            if (mounted) setWsConnected(true);
+
+            voiceSocket
+              .on('MASTERY_UPDATE', (msg) => {
+                setMasteryLevel({ topic: msg.topic, level: msg.level });
+              })
+              .on('LIVE_ANALYSIS_KEY_CONCEPT', (msg) => {
+                setKeyConcepts((prev) => {
+                  const exists = prev.find((c) => c.concept === msg.concept);
+                  if (exists) return prev;
+                  return [...prev.slice(-5), { concept: msg.concept, definition: msg.definition, icon: msg.icon || 'auto_awesome' }];
+                });
+              })
+              .on('ASSESSMENT_QUESTION', (msg) => {
+                setAssessmentQuestion(msg.question);
+              })
+              .on('DISCONNECTED', () => {
+                setWsConnected(false);
+              });
+          } catch (wsErr) {
+            console.warn('[Session] Analytics WS failed (non-fatal):', wsErr);
+          }
         }
 
-        await voiceSocket.connect(token);
-        if (!mounted) return;
-        setWsConnected(true);
-        setStatusMsg('Connected! Click the mic to start speaking.');
+        // 3. Start VoiceLive — credentials fetched from backend, STT+LLM+TTS handled by Azure
+        if (!voiceLiveStarted.current) {
+          voiceLiveStarted.current = true;
 
-        // 3. Set up WS event handlers
-        voiceSocket
-          .on('AI_RESPONSE', (msg) => {
-            setTranscript((prev) => [...prev, { role: 'agent', text: msg.text }]);
-            setIsAISpeaking(true);
-            azureVoice.speak(msg.text).finally(() => setIsAISpeaking(false));
-            transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-          })
-          .on('MASTERY_UPDATE', (msg) => {
-            setMasteryLevel({ topic: msg.topic, level: msg.level });
-          })
-          .on('LIVE_ANALYSIS_KEY_CONCEPT', (msg) => {
-            setKeyConcepts((prev) => {
-              const exists = prev.find((c) => c.concept === msg.concept);
-              if (exists) return prev;
-              return [...prev.slice(-5), { concept: msg.concept, definition: msg.definition, icon: msg.icon || 'auto_awesome' }];
-            });
-          })
-          .on('ASSESSMENT_QUESTION', (msg) => {
-            setAssessmentQuestion(msg.question);
-          })
-          .on('DISCONNECTED', () => {
-            setWsConnected(false);
-            setStatusMsg('Disconnected from server');
+          await azureVoice.startSession({
+            subject,
+            instructions: null, // uses built-in tutor persona in the service
+
+            // User spoke → show in transcript + forward to analytics WS
+            onTranscript: ({ text, emotion, confidence }) => {
+              if (!text || !mounted) return;
+              setTranscript((prev) => [...prev, { role: 'student', text }]);
+              setEmotionBadge(getEmotionBadge(emotion, confidence));
+              transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+              if (wsConnected && session_id) {
+                voiceSocket.sendTranscript({ sessionId: session_id, subject, text, emotion, confidence });
+              }
+            },
+
+            // AI reply transcript (after audio plays)
+            onAITranscript: (text) => {
+              if (!text || !mounted) return;
+              setTranscript((prev) => [...prev, { role: 'agent', text }]);
+              transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            },
+
+            onAISpeakingChange: (speaking) => {
+              if (!mounted) return;
+              setIsAISpeaking(speaking);
+            },
+
+            onError: (msg) => {
+              if (!mounted) return;
+              console.error('[VoiceLive]', msg);
+              setStatusMsg(`⚠️ ${msg}`);
+            },
           });
+
+          if (mounted) {
+            setIsRecording(true);
+            setStatusMsg('🎙️ Listening… speak naturally.');
+          }
+        }
       } catch (err) {
         if (!mounted) return;
         console.error('Session init error:', err);
-        setStatusMsg(`⚠️ ${err.message || 'Could not connect — backend may not be running'}`);
+        setStatusMsg(`⚠️ ${err.message || 'Could not start session'}`);
       }
     }
 
     init();
     return () => {
       mounted = false;
+      azureVoice.stop();
       voiceSocket.disconnect();
-      azureVoice.stopListening();
       clearInterval(timerRef.current);
     };
   }, [subject, token]);
 
-  // ── Microphone toggle ─────────────────────────────────────────────────────────
+  // ── Microphone toggle — pause/resume mic; VoiceLive WS stays open ─────────────
   const toggleRecording = async () => {
     if (isRecording) {
       azureVoice.stopListening();
       setIsRecording(false);
-      setStatusMsg('Mic off. Click to resume listening.');
+      setStatusMsg('Mic paused. Click to resume.');
     } else {
-      setStatusMsg('🎙️ Listening…');
-      await azureVoice.startListening({
-        onTranscript: ({ text, emotion, confidence }) => {
-          if (!text) return;
-          setTranscript((prev) => [...prev, { role: 'student', text }]);
-          setEmotionBadge(getEmotionBadge(emotion, confidence));
-          transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-
-          if (wsConnected && sessionId) {
-            voiceSocket.sendTranscript({ sessionId, subject, text, emotion, confidence });
-          }
-        },
-        onError: (err) => {
-          console.error('[Voice] Error:', err);
-          setStatusMsg('⚠️ Microphone error — check browser permissions');
-        },
-      });
+      await azureVoice.resumeListening();
       setIsRecording(true);
+      setStatusMsg('🎙️ Listening… speak naturally.');
     }
   };
 
   // ── End session ───────────────────────────────────────────────────────────────
   const endSession = async () => {
     clearInterval(timerRef.current);
-    azureVoice.stopListening();
+    await azureVoice.stop();
 
     if (sessionId) {
       if (wsConnected) voiceSocket.sendSessionEnd(sessionId);

@@ -51,10 +51,12 @@ export const user = {
   getSessions: () => request('GET', '/user/sessions'),
 };
 
-// ── Voice Token ───────────────────────────────────────────────────────────────
+// ── Voice Token (VoiceLive credentials) ──────────────────────────────────────
 export const voice = {
+  // Returns { endpoint, apiKey, model, voice } for direct Azure AI VoiceLive WS connection
   getToken: () => request('GET', '/voice/token'),
 };
+
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 export const sessions = {
