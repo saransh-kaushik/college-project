@@ -1,0 +1,14 @@
+.orb-gradient {
+    background: radial-gradient(circle, rgba(31, 173, 126, 0.4) 0%, rgba(31, 173, 126, 0.1) 50%, rgba(10, 12, 11, 0) 70%);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(31, 173, 126, 0.3);
+    border-radius: 10px;
+}
