@@ -1,34 +1,47 @@
-import axios from 'axios';
 import azureConfig from '../config/azure';
 import { logger } from '../utils/logger';
 
 /**
- * Exchanges the Azure Speech subscription key for a short-lived (10-minute) access token.
- * The frontend uses this token directly to open an Azure Cognitive Services connection.
+ * Returns Azure VoiceLive realtime credentials to the frontend.
+ * The frontend opens a direct WebSocket to the realtime endpoint —
+ * this handles STT + LLM + TTS in a single low-latency stream.
+ *
+ * Azure VoiceLive (Cognitive Services) endpoint format:
+ *   wss://{resource}.cognitiveservices.azure.com/voice-live/realtime
+ *     ?api-version=2025-05-01-preview
+ *     &api-key={key}    ← appended in the browser (never stored client-side)
+ *
+ * Azure OpenAI Realtime endpoint (fallback) format:
+ *   wss://{resource}.openai.azure.com/openai/realtime
+ *     ?api-version=2024-10-01-preview
+ *     &deployment={deployment}
  */
-export async function getAzureVoiceToken(): Promise<{ token: string; region: string; endpoint: string }> {
-  const { key, region } = azureConfig.speech;
+export async function getAzureVoiceToken(): Promise<{
+  endpoint: string;
+  apiKey: string;
+  deployment: string;
+  voice: string;
+}> {
+  const { endpoint: aoaiEndpoint, apiKey, deployment } = azureConfig.openai;
 
-  if (!key) {
-    throw new Error('AZURE_SPEECH_KEY not configured');
+  if (!aoaiEndpoint || !apiKey) {
+    throw new Error('AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_API_KEY not configured');
   }
 
-  try {
-    const tokenUrl = `https://${region}.api.cognitive.microsoft.com/sts/v1.0/issueToken`;
-    const response = await axios.post<string>(tokenUrl, null, {
-      headers: {
-        'Ocp-Apim-Subscription-Key': key,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
+  // Normalise the base endpoint: strip trailing slash
+  const baseEndpoint = aoaiEndpoint.replace(/\/$/, '');
 
-    const token = response.data;
-    const endpoint = `wss://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1`;
+  // Determine model/deployment to use for VoiceLive
+  const realtimeDeployment =
+    process.env.AZURE_VOICELIVE_MODEL ||
+    (deployment.includes('realtime') ? deployment : 'gpt-4o-realtime-preview');
 
-    logger.info('Azure Voice Live token issued');
-    return { token, region, endpoint };
-  } catch (err) {
-    logger.error('Failed to get Azure Voice token:', err);
-    throw new Error('Could not obtain Azure Voice Live token');
-  }
+  logger.info(`[VoiceLive] Serving base endpoint for deployment: ${realtimeDeployment}`);
+
+  return {
+    endpoint: baseEndpoint,
+    apiKey,
+    deployment: realtimeDeployment,
+    voice: process.env.AZURE_VOICELIVE_VOICE || 'shimmer',
+  };
 }

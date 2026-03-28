@@ -10,6 +10,9 @@
     "migrate": "node -e \"require('./dist/config/db').runMigrations()\""
   },
   "dependencies": {
+    "@azure/ai-voicelive": "^1.0.0-alpha.20251117.2",
+    "@azure/core-auth": "^1.10.1",
+    "@azure/identity": "^4.13.1",
     "@azure/openai": "^1.0.0-beta.12",
     "@pinecone-database/pinecone": "^2.2.2",
     "axios": "^1.6.8",

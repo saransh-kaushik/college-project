@@ -113,16 +113,19 @@ class VoiceLiveService {
         .replace(/\/$/, '');
 
       // Build the VoiceLive realtime endpoint
-      // Format: wss://{resource}.cognitiveservices.azure.com/voice-live/realtime
-      //         ?api-version=2025-05-01-preview&api-key={key}
-      const wsUrl = wsBase.includes('/voice-live/realtime')
-        ? `${wsBase}&api-key=${encodeURIComponent(creds.apiKey)}`
-        : `${wsBase}/voice-live/realtime?api-version=2025-05-01-preview&api-key=${encodeURIComponent(creds.apiKey)}`;
+      // Backend may provide a fully formed /openai/realtime endpoint, or just a base URI.
+      const hasRealtimePath = wsBase.includes('/realtime');
+      
+      let wsUrl = wsBase;
+      if (!hasRealtimePath) {
+        wsUrl += `/voice-live/realtime?api-version=2025-05-01-preview&model=${encodeURIComponent(creds.deployment)}`;
+      }
+      wsUrl += (wsUrl.includes('?') ? '&' : '?') + `api-key=${encodeURIComponent(creds.apiKey)}`;
 
       console.log('[VoiceLive] Connecting:', wsUrl.replace(/api-key=[^&]+/, 'api-key=***'));
 
-      // Azure OpenAI Realtime requires the 'openai-beta.realtime-v1' subprotocol
-      this.ws = new WebSocket(wsUrl, ['openai-beta.realtime-v1']);
+      // The VoiceLive Realtime endpoint connects as a standard WebSocket
+      this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
         console.log('[VoiceLive] WebSocket connected');
@@ -165,23 +168,34 @@ class VoiceLiveService {
     this._send({
       type: 'session.update',
       session: {
-        modalities: ['text', 'audio'],
+        modalities: ['audio', 'text'],
         instructions: systemInstructions,
-        // Voice must be one of: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar
-        voice: creds.voice || 'shimmer',
-        input_audio_format: 'pcm16',
-        output_audio_format: 'pcm16',
-        input_audio_transcription: {
-          model: 'whisper-1',
-        },
+        
         turn_detection: {
-          type: 'server_vad',
-          threshold: 0.5,
+          type: 'azure_semantic_vad',
+          threshold: 0.4,
           prefix_padding_ms: 300,
-          silence_duration_ms: 600,
-          create_response: true,
+          silence_duration_ms: 800,
+          remove_filler_words: false
         },
-        temperature: 0.8,
+        
+        input_audio_noise_reduction: {
+          type: 'azure_deep_noise_suppression'
+        },
+        input_audio_echo_cancellation: {
+          type: 'server_echo_cancellation' 
+        },
+        
+        voice: {
+          name: 'en-US-JennyMultilingualNeural',
+          type: 'azure-standard'
+        },
+        
+        input_audio_transcription: {
+          enabled: true,
+          model: 'gpt-4o-mini-transcribe',
+          format: 'text'
+        }
       },
     });
 

@@ -6,11 +6,13 @@ export async function getVoiceToken(req: AuthRequest, res: Response, next: NextF
   try {
     const result = await getAzureVoiceToken();
     res.json({
-      azure_token: result.token,
-      region: result.region,
       endpoint: result.endpoint,
+      apiKey: result.apiKey,
+      deployment: result.deployment,
+      voice: result.voice,
     });
   } catch (err) {
     next(err);
   }
 }
+
