@@ -1,6 +1,7 @@
 import pool from '../config/db';
 import { chat, ChatMessage } from '../services/openai.service';
 import { retrieveContext } from '../services/pinecone.service';
+import { retrieveUserContext } from '../services/rag.service';
 import { updateMastery } from '../services/analytics.service';
 import { logger } from '../utils/logger';
 
@@ -58,10 +59,15 @@ export class BaseAgent {
     );
     this.currentMastery = parseFloat(masteryRow.rows[0]?.avg_level || '0');
 
-    // Retrieve RAG context
+    // Retrieve RAG context — subject knowledge base
     const ragChunks = await retrieveContext(text, this.config.pineconeNamespace, 3);
-    const ragContext = ragChunks.length > 0
-      ? `\n\n[KNOWLEDGE BASE CONTEXT]\n${ragChunks.join('\n---\n')}`
+
+    // Also retrieve context from user-uploaded documents
+    const userChunks = await retrieveUserContext(text, userId, 3);
+
+    const allChunks = [...ragChunks, ...userChunks];
+    const ragContext = allChunks.length > 0
+      ? `\n\n[KNOWLEDGE BASE CONTEXT]\n${allChunks.join('\n---\n')}`
       : '';
 
     // Build adaptive system prompt

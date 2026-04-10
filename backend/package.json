@@ -25,6 +25,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "openai": "^4.40.0",
+    "pdf-parse": "^1.1.1",
     "pg": "^8.11.5",
     "uuid": "^9.0.1",
     "ws": "^8.17.0"
@@ -36,6 +37,7 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.12.7",
+    "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.11.5",
     "@types/uuid": "^9.0.8",
     "@types/ws": "^8.5.10",
