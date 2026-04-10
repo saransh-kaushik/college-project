@@ -68,14 +68,15 @@ export const sessions = {
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 export const chat = {
-  sendMessage: (sessionId, text) =>
-    request('POST', '/chat/message', { session_id: sessionId, text }),
+  sendMessage: (sessionId, text, documentId) =>
+    request('POST', '/chat/message', { session_id: sessionId, text, document_id: documentId || null }),
   uploadFile: (file, sessionId) => {
     const form = new FormData();
     form.append('file', file);
     if (sessionId) form.append('session_id', sessionId);
     return request('POST', '/chat/upload', form, true);
   },
+  getDocuments: () => request('GET', '/chat/documents'),
 };
 
 // ── Progress ───────────────────────────────────────────────────────────────────

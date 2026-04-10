@@ -45,8 +45,9 @@ export class BaseAgent {
     text: string;
     emotion?: string;
     confidence?: number;
+    documentId?: string;
   }): Promise<AgentResponse> {
-    const { userId, sessionId, text, emotion, confidence } = opts;
+    const { userId, sessionId, text, emotion, confidence, documentId } = opts;
 
     // Detect confusion
     const isConfused =
@@ -62,10 +63,17 @@ export class BaseAgent {
     // Retrieve RAG context — subject knowledge base
     const ragChunks = await retrieveContext(text, this.config.pineconeNamespace, 3);
 
-    // Also retrieve context from user-uploaded documents
-    const userChunks = await retrieveUserContext(text, userId, 3);
+    // Also retrieve context from user-uploaded documents (filtered to selected doc if any)
+    const userChunks = await retrieveUserContext(text, userId, 3, documentId);
 
     const allChunks = [...ragChunks, ...userChunks];
+    
+    if (allChunks.length > 0) {
+      logger.info(`[RAG] Agent "${this.config.subject}" retrieved ${ragChunks.length} subject chunks and ${userChunks.length} user document chunks from Pinecone. Document filter: ${documentId || 'None'}`);
+    } else {
+      logger.info(`[RAG] Agent "${this.config.subject}" found 0 context chunks in Pinecone for this query. Document filter: ${documentId || 'None'}`);
+    }
+
     const ragContext = allChunks.length > 0
       ? `\n\n[KNOWLEDGE BASE CONTEXT]\n${allChunks.join('\n---\n')}`
       : '';

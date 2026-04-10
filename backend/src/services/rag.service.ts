@@ -143,16 +143,23 @@ export async function retrieveUserContext(
   query: string,
   userId: string,
   topK = 3,
+  documentId?: string,
 ): Promise<string[]> {
   try {
     const pc = getPineconeClient();
     const index = pc.index(PINECONE_INDEX);
     const vector = await embed(query);
 
+    // When a specific doc is selected, filter to only its chunks
+    const filter: Record<string, unknown> = documentId
+      ? { documentId: { $eq: documentId } }
+      : { userId: { $eq: userId } };
+
     const results = await index.namespace(`user_${userId}`).query({
       vector,
       topK,
       includeMetadata: true,
+      filter,
     });
 
     return results.matches
