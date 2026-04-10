@@ -70,9 +70,10 @@ export const sessions = {
 export const chat = {
   sendMessage: (sessionId, text) =>
     request('POST', '/chat/message', { session_id: sessionId, text }),
-  uploadFile: (file) => {
+  uploadFile: (file, sessionId) => {
     const form = new FormData();
     form.append('file', file);
+    if (sessionId) form.append('session_id', sessionId);
     return request('POST', '/chat/upload', form, true);
   },
 };

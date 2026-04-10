@@ -5,10 +5,11 @@ import { sessions as sessionsApi, getAuthData } from '../services/api.js';
 import { voiceSocket } from '../services/socket.js';
 import { azureVoice } from '../services/azureVoice.js';
 
+// Note: colors use CSS custom properties from the design system (not Tailwind).
 const SUBJECT_CONFIG = {
-  physics: { name: 'Physics', tutor: 'Nova', color: 'text-blue-400', icon: 'bolt' },
-  biology: { name: 'Biology', tutor: 'Vera', color: 'text-green-400', icon: 'eco' },
-  chemistry: { name: 'Chemistry', tutor: 'Aiden', color: 'text-purple-400', icon: 'science' },
+  physics:   { name: 'Physics',   tutor: 'Nova',  style: { color: '#60a5fa' }, icon: 'bolt' },
+  biology:   { name: 'Biology',   tutor: 'Vera',  style: { color: '#4ade80' }, icon: 'eco' },
+  chemistry: { name: 'Chemistry', tutor: 'Aiden', style: { color: '#c084fc' }, icon: 'science' },
 };
 
 export default function Session() {

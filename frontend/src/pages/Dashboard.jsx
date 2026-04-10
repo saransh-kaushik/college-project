@@ -70,7 +70,8 @@ export default function Dashboard() {
         sid = session_id;
       }
 
-      const data = await chatApi.sendMessage(sid || 'general', userMsg);
+      const data = await chatApi.sendMessage(sid, userMsg);
+
       setMessages((prev) => [...prev, { role: 'agent', content: data.ai_response }]);
     } catch (err) {
       setMessages((prev) => [...prev, {
@@ -85,15 +86,29 @@ export default function Dashboard() {
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      setMessages((prev) => [...prev, { role: 'user', content: `📎 Uploading: ${file.name}…` }]);
-      const result = await chatApi.uploadFile(file);
+
+    // Client-side type guard (backend also enforces this)
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['pdf', 'txt'].includes(ext || '')) {
       setMessages((prev) => [...prev, {
         role: 'agent',
-        content: `✅ Document **${file.name}** uploaded and parsed. I can now answer questions about it!`,
+        content: `❌ Only .pdf and .txt files are supported. You tried to upload a .${ext} file.`,
+      }]);
+      return;
+    }
+
+    try {
+      setMessages((prev) => [...prev, { role: 'user', content: `📎 Uploading: ${file.name}…` }]);
+      const result = await chatApi.uploadFile(file, sessionId);
+      setMessages((prev) => [...prev, {
+        role: 'agent',
+        content: `✅ **${file.name}** uploaded and processed into ${result.chunk_count} chunks. I can now answer questions from its content!`,
       }]);
     } catch (err) {
       setMessages((prev) => [...prev, { role: 'agent', content: `❌ Upload failed: ${err.message}` }]);
+    } finally {
+      // Reset input so the same file can be re-uploaded if needed
+      e.target.value = '';
     }
   };
 
@@ -260,7 +275,7 @@ export default function Dashboard() {
               <div className="relative flex items-end gap-3 bg-background-light dark:bg-slate-900/50 p-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm focus-within:border-primary transition-all">
                 <label className="p-2 text-slate-400 hover:text-primary transition-colors cursor-pointer" title="Attach file">
                   <span className="material-icons-outlined">attach_file</span>
-                  <input type="file" className="hidden" accept=".pdf,.txt,.md" onChange={handleFileUpload} />
+                  <input type="file" className="hidden" accept=".pdf,.txt" onChange={handleFileUpload} />
                 </label>
                 <textarea
                   className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 resize-none custom-scrollbar outline-none"
